@@ -18,10 +18,10 @@ Everything is generated in code: sprites are vector-drawn on the fly, and all so
 ## Gameplay
 
 - The **Hive Serpent** is a chain of segments that zigzags down through the crystal field, turning at every crystal and dropping a row. Shoot a segment and it leaves a crystal behind and the chain splits: the piece behind becomes a new head. Heads are worth more.
-- Each level the chain gets shorter, with more separate heads and more speed.
+- Every level brings **more centipedes**: extra full chains entering from both sides, a growing swarm of solo heads, and more speed.
 - Once the chain reaches your zone it bounces up and down inside it, and extra solo heads sneak in from the sides. Touching anything dangerous costs a life.
-- **Crystals** crack over 4 hits. Between levels, damaged crystals repair themselves for bonus points.
-- **Pests:**
+- **Crystals** crack over 4 hits. The field fully resets every level: your zone is cleared, damaged crystals repair themselves for bonus points, and destroyed ones regrow, with a denser field each level.
+- **Pests** (more of them, more often, as levels climb):
   - **Skitter:** zigzags through your zone eating crystals. Worth more the closer you shoot it.
   - **Dropper:** falls straight down, seeding new crystals.
   - **Venom drone:** crosses sideways poisoning crystals. A chain that bumps poison plunges straight to the bottom.

@@ -25,6 +25,20 @@
   F.remove = function (c, r) {
     if (F.get(c, r)) { F.cells[r * C.COLS + c] = null; F.count--; }
   };
+  F.target = (n) => Math.min(40, 27 + n);
+  /* positions that would restore the field to n crystals above the player zone */
+  F.planFill = function (n) {
+    const plan = [], taken = new Set();
+    const has = (c, r) => F.get(c, r) || taken.has(c + ',' + r);
+    let guard = 0;
+    while (F.count + plan.length < n && guard++ < 900) {
+      const c = U.randInt(0, C.COLS - 1), r = U.randInt(2, C.ZONE_TOP - 2);
+      if (has(c, r) || has(c - 1, r) || has(c + 1, r)) continue;
+      plan.push({ c, r }); taken.add(c + ',' + r);
+    }
+    return plan;
+  };
+  F.inZone = function () { return F.cells.filter((k) => k && k.r >= C.ZONE_TOP); };
   F.fill = function (n) {
     let guard = 0;
     while (F.count < n && guard++ < 500) {

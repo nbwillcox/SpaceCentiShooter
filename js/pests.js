@@ -22,7 +22,7 @@
 
   P.reset = function (g) {
     g.pests = [];
-    g.pestT = { skitter: 9, dropper: 6, venom: 16 };
+    g.pestT = { skitter: 6, dropper: 5, venom: 12 };
   };
 
   P.spawn = function (g, type) {
@@ -99,10 +99,11 @@
     for (let i = g.pests.length - 1; i >= 0; i--) if (g.pests[i].dead) { g.pests[i] = g.pests[g.pests.length - 1]; g.pests.pop(); }
     if (g.state !== 'play' || g.over) return;
     const n = g.stage, t = g.pestT;
-    t.skitter -= dt; t.dropper -= dt; if (n >= 3) t.venom -= dt;
-    if (t.skitter <= 0) { t.skitter = U.rand(12, 20) / (1 + 0.03 * n); if (!g.pests.some((p) => p.type === 'skitter')) P.spawn(g, 'skitter'); }
-    if (t.dropper <= 0) { t.dropper = (F.count < 20 ? U.rand(5, 8) : U.rand(14, 22)); if (!g.pests.some((p) => p.type === 'dropper')) P.spawn(g, 'dropper'); }
-    if (n >= 3 && t.venom <= 0) { t.venom = U.rand(18, 28); if (!g.pests.some((p) => p.type === 'venom')) P.spawn(g, 'venom'); }
+    const count = (type) => g.pests.filter((p) => p.type === type).length;
+    t.skitter -= dt; t.dropper -= dt; if (n >= 2) t.venom -= dt;
+    if (t.skitter <= 0) { t.skitter = U.rand(9, 15) / (1 + 0.06 * n); if (count('skitter') < Math.min(3, 1 + Math.floor(n / 5))) P.spawn(g, 'skitter'); }
+    if (t.dropper <= 0) { t.dropper = (F.count < 20 ? U.rand(4, 7) : U.rand(11, 17)) / (1 + 0.05 * n); if (count('dropper') < Math.min(3, 1 + Math.floor(n / 4))) P.spawn(g, 'dropper'); }
+    if (n >= 2 && t.venom <= 0) { t.venom = U.rand(14, 22) / (1 + 0.05 * n); if (count('venom') < Math.min(3, 1 + Math.floor(n / 6))) P.spawn(g, 'venom'); }
     if (g.thiefAt > 0 && g.stageTime > g.thiefAt) { g.thiefAt = 0; P.spawn(g, 'thief'); }
   };
 

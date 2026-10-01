@@ -21,18 +21,27 @@
 
   Ch.reset = function (g) { g.chains = []; g.pendingSolo = []; g.harassT = 8; };
 
+  /* More centipedes every level: several full chains plus a growing swarm of solo heads. */
   Ch.spawnWave = function (g, n) {
-    const total = 12 + Math.min(6, Math.floor((n - 1) / 3));
-    const heads = Math.min(n, total), len = total - (heads - 1);
+    const segTotal = Math.min(36, 12 + Math.floor(1.6 * (n - 1)));
+    const solos = Math.min(n - 1, 8);
+    const body = segTotal - solos;
+    const chains = Math.max(1, Math.min(1 + Math.floor((n - 1) / 2), 5, Math.floor(body / 3)));
     const hpHead = 1 + Math.floor((n - 1) / 8), hpBody = 1 + Math.floor((n - 1) / 14);
     g.chainSpeed = Math.min(13, 5.2 + 0.4 * n);
-    const segs = [];
-    for (let i = 0; i < len; i++) segs.push(seg(-i, 0, 1, i === 0 ? hpHead : hpBody, false));
-    const bodies = segs.slice(2);
-    for (let k = 0; k < (n >= 4 ? 2 : 1) && bodies.length > 3; k++) U.pick(bodies).carrier = true;
-    newChain(g, segs);
-    for (let j = 0; j < heads - 1; j++) g.pendingSolo.push({ t: 2.2 + j * 1.15 + Math.random() * 0.8, side: j % 2, hp: hpHead });
+    const lens = [];
+    for (let i = 0; i < chains; i++) lens.push(Math.floor(body / chains) + (i < body % chains ? 1 : 0));
+    lens.forEach((len, i) => g.pendingSolo.push({ t: i === 0 ? 0 : 1.4 * i + Math.random() * 0.6, side: i % 2, hp: hpHead, hpBody, len }));
+    for (let j = 0; j < solos; j++) g.pendingSolo.push({ t: 2.4 + j * 1.0 + Math.random() * 0.8, side: j % 2, hp: hpHead });
+    g.carriersLeft = Math.min(4, 1 + Math.floor(n / 4));
   };
+
+  function spawnChain(g, o) {
+    const left = o.side === 0, dir = left ? 1 : -1, segs = [];
+    for (let i = 0; i < o.len; i++) segs.push(seg(left ? -i : C.COLS + i, 0, dir, i === 0 ? o.hp : o.hpBody, false));
+    if (g.carriersLeft > 0 && o.len > 3) { U.pick(segs.slice(2)).carrier = true; g.carriersLeft--; }
+    newChain(g, segs, { dir, vdir: 1 });
+  }
 
   Ch.spawnSolo = function (g, o) {
     o = o || {};
@@ -79,7 +88,7 @@
     for (let i = g.pendingSolo.length - 1; i >= 0; i--) {
       const p = g.pendingSolo[i];
       p.t -= dt;
-      if (p.t <= 0) { g.pendingSolo.splice(i, 1); Ch.spawnSolo(g, { side: p.side, hp: p.hp }); }
+      if (p.t <= 0) { g.pendingSolo.splice(i, 1); if (p.len) spawnChain(g, p); else Ch.spawnSolo(g, { side: p.side, hp: p.hp }); }
     }
     let inZone = false, harassers = 0;
     for (const ch of g.chains) {
@@ -93,9 +102,9 @@
     }
     if (g.state === 'play' && inZone && !g.over) {
       g.harassT -= dt;
-      const cap = Math.min(4, 1 + Math.floor(g.stage / 4));
+      const cap = Math.min(6, 1 + Math.floor(g.stage / 3));
       if (g.harassT <= 0) {
-        g.harassT = Math.max(5, 11 - g.stage * 0.4);
+        g.harassT = Math.max(4, 10 - g.stage * 0.5);
         if (harassers < cap) Ch.spawnSolo(g, { harasser: true, row: U.randInt(C.ZONE_TOP, BOTTOM), vdir: Math.random() < 0.5 ? 1 : -1, hp: 1 + Math.floor((g.stage - 1) / 8) });
       }
     }

@@ -22,7 +22,7 @@
     this.thiefAt = 0; this.repair = null; this.world = 0; this.chainSpeed = 6;
     this.player = newPlayer();
     this.hi = G.scores.best();
-    FX.reset(); F.reset(); F.fill(26); Ch.reset(this); P.reset(this);
+    FX.reset(); F.reset(); F.fill(F.target(startStage || 1)); Ch.reset(this); P.reset(this);
     this.startStage(startStage || 1);
   };
 
@@ -407,15 +407,27 @@
       case 'clear': {
         this.timer -= dt;
         if (this.timer > 0) break;
-        if (!this.repair) { const q = F.damaged(); q.sort((a, b) => a.r - b.r || a.c - b.c); this.repair = { q, t: 0, end: 1.0, n: 0 }; }
-        const R = this.repair;
-        R.t -= dt;
-        while (R.t <= 0 && R.q.length) {
-          const k = R.q.shift();
-          if (F.get(k.c, k.r) === k) { F.repair(k); R.n++; if (!this.demo) { this.addScore(5); A.sfx.repair(R.n); } }
-          R.t += this.demo ? 0.02 : 0.07;
+        if (!this.repair) {
+          // full field reset: clear the player zone, repair every damaged crystal, regrow the destroyed ones
+          const zone = F.inZone(), zset = new Set(zone);
+          const damaged = F.damaged().filter((k) => !zset.has(k)).sort((x, y) => x.r - y.r || x.c - y.c);
+          this.repair = { phase: 0, zone, damaged, grow: null, t: 0, end: 0.9, n: 0 };
         }
-        if (!R.q.length) { R.end -= dt; if (R.end <= 0) this.startStage(this.stage + 1); }
+        const R = this.repair, fast = this.demo;
+        R.t -= dt;
+        while (R.t <= 0) {
+          if (R.phase === 0) {
+            if (R.zone.length) { const k = R.zone.shift(); if (F.get(k.c, k.r) === k) { FX.sparks(F.cx(k.c), F.cy(k.r), 6, 120, 'hsla(200,100%,70%,1)', 0.35); F.remove(k.c, k.r); A.sfx.crystalBreak(); } R.t += fast ? 0.01 : 0.04; }
+            else { R.phase = 1; while (F.count > 56) { const ks = F.cells.filter(Boolean); const k = ks[Math.floor(Math.random() * ks.length)]; FX.sparks(F.cx(k.c), F.cy(k.r), 5, 110, 'hsla(200,100%,70%,1)', 0.3); F.remove(k.c, k.r); } R.damaged = F.damaged().sort((x, y) => x.r - y.r || x.c - y.c); }
+          } else if (R.phase === 1) {
+            if (R.damaged.length) { const k = R.damaged.shift(); if (F.get(k.c, k.r) === k) { F.repair(k); R.n++; if (!this.demo) { this.addScore(5); A.sfx.repair(R.n); } } R.t += fast ? 0.01 : 0.06; }
+            else { R.grow = F.planFill(F.target(this.stage + 1)); R.phase = 2; }
+          } else if (R.phase === 2) {
+            if (R.grow.length) { const q = R.grow.shift(); if (!F.get(q.c, q.r)) { F.add(q.c, q.r); FX.ring(F.cx(q.c), F.cy(q.r), 4, 24, 'hsla(190,100%,75%,1)', 0.3, 2); FX.sparks(F.cx(q.c), F.cy(q.r), 4, 90, 'hsla(190,100%,80%,1)', 0.3); R.n++; if (!this.demo) A.sfx.repair(R.n); } R.t += fast ? 0.01 : 0.05; }
+            else { R.phase = 3; }
+          } else break;
+        }
+        if (R.phase === 3) { if (!R.swept) { R.swept = true; for (const k of F.damaged()) F.repair(k); } R.end -= dt; if (R.end <= 0) { for (const k of F.damaged()) { k.hp = 4; k.poison = false; } this.startStage(this.stage + 1); } }
         break;
       }
       default:
