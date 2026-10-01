@@ -6,12 +6,30 @@
   const HUD = {};
   const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
 
+  const GS = 2, gcache = new Map();
+  function glowText(ctx, s, x, y, size, color, align, weight, glow) {
+    const key = s + '|' + size + '|' + color + '|' + weight + '|' + glow;
+    let e = gcache.get(key);
+    if (!e) {
+      if (gcache.size > 120) gcache.clear();
+      const f = weight + ' ' + (size * GS) + 'px ' + FONT, c = document.createElement('canvas'), cx = c.getContext('2d');
+      cx.font = f;
+      const tw = cx.measureText(s).width, pad = 16 * GS;
+      c.width = Math.ceil(tw + pad * 2); c.height = Math.ceil(size * GS * 1.5 + pad * 2);
+      cx.font = f; cx.textAlign = 'left'; cx.textBaseline = 'alphabetic';
+      cx.shadowColor = glow; cx.shadowBlur = 10 * GS; cx.fillStyle = color; cx.fillText(s, pad, pad + size * GS);
+      e = { c, tw: tw / GS, pad: pad / GS, by: pad / GS + size };
+      gcache.set(key, e);
+    }
+    const ox = align === 'center' ? -e.tw / 2 : align === 'right' ? -e.tw : 0;
+    ctx.drawImage(e.c, x + ox - e.pad, y - e.by, e.c.width / GS, e.c.height / GS);
+  }
   function txt(ctx, s, x, y, size, color, align, weight, glow) {
-    ctx.font = (weight || 800) + ' ' + size + 'px ' + FONT;
+    weight = weight || 800;
+    if (glow) { glowText(ctx, s, x, y, size, color, align, weight, glow); return; }
+    ctx.font = weight + ' ' + size + 'px ' + FONT;
     ctx.textAlign = align || 'left'; ctx.textBaseline = 'alphabetic';
-    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 10; }
     ctx.fillStyle = color; ctx.fillText(s, x, y);
-    ctx.shadowBlur = 0;
   }
   HUD.txt = txt;
 
@@ -37,9 +55,8 @@
     }
     for (let i = 0; i < C.MAX_TIER; i++) {
       ctx.fillStyle = i < p.tier ? '#ffd24a' : 'rgba(255,255,255,0.18)';
-      ctx.shadowColor = '#ffd24a'; ctx.shadowBlur = i < p.tier ? 8 : 0;
+      if (i < p.tier) { ctx.globalAlpha = 0.55; ctx.drawImage(GFX.glow('rgba(255,210,74,1)'), W / 2 - 46 + i * 20, 47, 32, 28); ctx.globalAlpha = 1; }
       ctx.fillRect(W / 2 - 38 + i * 20, 58, 16, 6);
-      ctx.shadowBlur = 0;
     }
     if (p.shield > 0) {
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(W / 2 - 40, 68, 80, 3);
@@ -47,8 +64,9 @@
     }
     for (let i = 0; i < p.bombs; i++) {
       const bx = W - 20 - i * 22, by = 62;
-      ctx.fillStyle = '#ff4d6d'; ctx.shadowColor = '#ff4d6d'; ctx.shadowBlur = 8;
-      ctx.beginPath(); ctx.arc(bx, by, 6, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.6; ctx.drawImage(GFX.glow('rgba(255,77,109,1)'), bx - 12, by - 12, 24, 24); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ff4d6d';
+      ctx.beginPath(); ctx.arc(bx, by, 6, 0, TAU); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.fillRect(bx - 1, by - 10, 2, 4);
     }
     HUD.banner(ctx, g);
@@ -82,7 +100,7 @@
   };
 
   /* decorative panels on wide windows; coords are screen pixels */
-  HUD.sides = function (ctx, v, g) {
+  const paintSides = function (ctx, v, g) {
     const sw = v.ox;
     if (sw < 150) return;
     const sc = Math.min(1.15, sw / 240), cx1 = sw / 2, cx2 = v.ox + W * v.s + sw / 2, top = v.oy + 70 * sc;
@@ -97,6 +115,25 @@
     txt(ctx, 'github.com/nbwillcox', cx2, top + 248 * sc, 12 * sc, col, 'center', 700);
     txt(ctx, '/SpaceCentiShooter', cx2, top + 264 * sc, 12 * sc, col, 'center', 700);
     ctx.restore();
+  };
+
+  let sideCache = null, sideKey = '';
+  HUD.sides = function (ctx, v, g) {
+    if (v.ox < 150) return;
+    const key = [v.w, v.h, v.rs.toFixed(2), Math.round(v.ox), Math.round(v.oy), v.s.toFixed(3), G.scores.list.slice(0, 7).map((r) => r.name + r.score).join(',')].join('|');
+    if (key !== sideKey || !sideCache) {
+      sideKey = key;
+      const pw = Math.round(v.ox * v.rs), ph = Math.round(v.h * v.rs);
+      const full = document.createElement('canvas');
+      full.width = Math.round(v.w * v.rs); full.height = ph;
+      const x = full.getContext('2d');
+      x.scale(v.rs, v.rs);
+      paintSides(x, v, g);
+      const strip = (sx) => { const c = document.createElement('canvas'); c.width = pw; c.height = ph; c.getContext('2d').drawImage(full, sx, 0, pw, ph, 0, 0, pw, ph); return c; };
+      sideCache = { l: strip(0), r: strip(full.width - pw) };
+    }
+    ctx.drawImage(sideCache.l, 0, 0, v.ox, v.h);
+    ctx.drawImage(sideCache.r, v.w - v.ox, 0, v.ox, v.h);
   };
 
   G.hud = HUD;

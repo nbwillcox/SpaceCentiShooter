@@ -4,7 +4,8 @@
   const U = G.U, S = G.settings, TAU = U.TAU;
   const FX = { add: [], norm: [], texts: [], shake: 0, flash: 0, flashColor: '255,255,255' };
   const pool = [];
-  const MAX = 900;
+  const MAX = 600;
+  const sparkGroups = new Map();
 
   const col = (h, l) => `hsla(${Math.round(h / 10) * 10},100%,${l || 60}%,1)`;
   FX.col = col;
@@ -101,9 +102,11 @@
     for (let i = 0; i < FX.add.length; i++) {
       const p = FX.add[i], k = p.t / p.life;
       if (p.kind === 'spark') {
-        ctx.globalAlpha = 1 - k;
-        ctx.strokeStyle = p.color; ctx.lineWidth = p.size;
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.045, p.y - p.vy * 0.045); ctx.stroke();
+        // sparks are batched per colour / width / fade step so a big blast is a handful of strokes instead of hundreds
+        const key = p.color + '|' + p.size + '|' + Math.min(7, ((1 - k) * 8) | 0);
+        let g = sparkGroups.get(key);
+        if (!g) { g = { color: p.color, size: p.size, a: (Math.min(7, ((1 - k) * 8) | 0) + 0.5) / 8, pts: [] }; sparkGroups.set(key, g); }
+        g.pts.push(p.x, p.y, p.x - p.vx * 0.045, p.y - p.vy * 0.045);
       } else if (p.kind === 'glow') {
         const r = Math.max(1, p.size * (1 + p.grow * k));
         ctx.globalAlpha = (1 - k) * (1 - k * 0.5);
@@ -114,6 +117,15 @@
         ctx.strokeStyle = p.color; ctx.lineWidth = p.lw * (1 - k * 0.6);
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.stroke();
       }
+    }
+    for (const g of sparkGroups.values()) {
+      const n = g.pts.length;
+      if (!n) continue;
+      ctx.globalAlpha = g.a; ctx.strokeStyle = g.color; ctx.lineWidth = g.size;
+      ctx.beginPath();
+      for (let j = 0; j < n; j += 4) { ctx.moveTo(g.pts[j], g.pts[j + 1]); ctx.lineTo(g.pts[j + 2], g.pts[j + 3]); }
+      ctx.stroke();
+      g.pts.length = 0;
     }
     ctx.globalAlpha = 1;
   };
