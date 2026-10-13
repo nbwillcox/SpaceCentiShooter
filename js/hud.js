@@ -7,11 +7,12 @@
   const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
 
   const GS = 2, gcache = new Map();
-  function glowText(ctx, s, x, y, size, color, align, weight, glow) {
+  /* a glowing string is blurred once into a small canvas and cached; numbers (the score changes with every kill) are drawn digit by digit from that cache, so a new value never costs a new blur */
+  function glowEntry(s, size, color, weight, glow) {
     const key = s + '|' + size + '|' + color + '|' + weight + '|' + glow;
     let e = gcache.get(key);
     if (!e) {
-      if (gcache.size > 120) gcache.clear();
+      if (gcache.size > 160) gcache.clear();
       const f = weight + ' ' + (size * GS) + 'px ' + FONT, c = document.createElement('canvas'), cx = c.getContext('2d');
       cx.font = f;
       const tw = cx.measureText(s).width, pad = 16 * GS;
@@ -21,7 +22,17 @@
       e = { c, tw: tw / GS, pad: pad / GS, by: pad / GS + size };
       gcache.set(key, e);
     }
-    const ox = align === 'center' ? -e.tw / 2 : align === 'right' ? -e.tw : 0;
+    return e;
+  }
+  function glowText(ctx, s, x, y, size, color, align, weight, glow) {
+    if (s.length > 1 && /^[0-9,.+x -]+$/.test(s)) {
+      const gl = []; let tw = 0;
+      for (const ch of s) { const e = glowEntry(ch, size, color, weight, glow); gl.push(e); tw += e.tw; }
+      let pen = x + (align === 'center' ? -tw / 2 : align === 'right' ? -tw : 0);
+      for (const e of gl) { ctx.drawImage(e.c, pen - e.pad, y - e.by, e.c.width / GS, e.c.height / GS); pen += e.tw; }
+      return;
+    }
+    const e = glowEntry(s, size, color, weight, glow), ox = align === 'center' ? -e.tw / 2 : align === 'right' ? -e.tw : 0;
     ctx.drawImage(e.c, x + ox - e.pad, y - e.by, e.c.width / GS, e.c.height / GS);
   }
   function txt(ctx, s, x, y, size, color, align, weight, glow) {

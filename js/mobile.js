@@ -14,7 +14,7 @@
   const force = new URLSearchParams(W.location.search).get('touch');
   const coarse = mm('(pointer: coarse)'), standalone = mm('(display-mode: standalone)') || mm('(display-mode: fullscreen)') || !!navigator.standalone;
   TK.supported = coarse || navigator.maxTouchPoints > 0 || force === '1';
-  let seen = false, canvas = null, root = null, ctrls = [], built = false, menuState = null, rotState = null, ignoreRotate = false, gestured = false;
+  let hid = false, autoHeld = false, autoSuspend = 0, seen = false, canvas = null, root = null, ctrls = [], built = false, menuState = null, rotState = null, ignoreRotate = false, gestured = false;
   const want = () => (force === '1' ? true : force === '0' ? false : st.mode === 'on' ? true : st.mode === 'off' ? false : coarse || seen);
   const menuOpen = CFG.menuOpen || (() => D.body.classList.contains('menu-open') || !!D.querySelector('#ui .screen:not(.hidden)'));
 
@@ -27,8 +27,8 @@
     else if (code === 'Space') key = ' ';
     return { key, kc };
   }
-  function fireKey(type, code) {
-    const k = keyInfo(code), ev = new KeyboardEvent(type, { code, key: k.key, keyCode: k.kc, which: k.kc, bubbles: true, cancelable: true });
+  function fireKey(type, code, repeat) {
+    const k = keyInfo(code), ev = new KeyboardEvent(type, { code, key: k.key, keyCode: k.kc, which: k.kc, repeat: !!repeat, bubbles: true, cancelable: true });
     if (ev.keyCode !== k.kc) { Object.defineProperty(ev, 'keyCode', { get: () => k.kc }); Object.defineProperty(ev, 'which', { get: () => k.kc }); }
     D.body.dispatchEvent(ev);
   }
@@ -82,14 +82,18 @@
     const keys = spec.keys || (spec.key ? [spec.key] : []);
     const c = claim(b, {
       down(e) {
+        if (spec.toggle) { c.state = !c.state; b.classList.toggle('lit', c.state); if (spec.onToggle) spec.onToggle(c.state); return; }
         b.classList.add('on');
+        if (spec.suspendAuto) TK.suspendAuto(true);
         keys.forEach((k) => (spec.hold === false ? tapKey(k) : hold(k)));
         if (spec.mouse !== undefined) { const r = b.getBoundingClientRect(); mouse('mousedown', r.left + r.width / 2, r.top + r.height / 2, spec.mouse); }
         if (spec.onDown) spec.onDown(e);
       },
       move() {},
       up(e) {
+        if (spec.toggle) return;
         b.classList.remove('on');
+        if (spec.suspendAuto) TK.suspendAuto(false);
         if (spec.hold !== false) keys.forEach((k) => drop(k));
         if (spec.mouse !== undefined) { const r = b.getBoundingClientRect(); mouse('mouseup', r.left + r.width / 2, r.top + r.height / 2, spec.mouse); }
         if (spec.onUp) spec.onUp(e);
@@ -101,6 +105,7 @@
     const z = zone(spec, parent), ring = div('tk-stick', parent), knob = div('tk-knob', ring), rest = div('tk-rest', parent), K = spec.keys || {};
     const R = () => (spec.r || 56) * st.size, b = spec.zone || [0, 0.4, 0.5, 1], at = spec.at || [(b[0] + b[2]) / 2, b[1] + (b[3] - b[1]) * 0.68];
     rest.style.left = (st.left && spec.mirror !== false ? 1 - at[0] : at[0]) * 100 + '%'; rest.style.top = at[1] * 100 + '%';
+    ring.dataset.when = rest.dataset.when = spec.when || 'play';
     rest.style.setProperty('--r', 'calc(var(--k) * ' + (spec.r || 56) + 'px)');
     let ox = 0, oy = 0, held = {}, axis = '';
     const place = () => { ring.style.left = ox + 'px'; ring.style.top = oy + 'px'; };
@@ -129,13 +134,22 @@
     }, spec);
     c.el = z; return c;
   }
-  function mkDrag(spec, parent) {                                                               /* a finger acting as the mouse: absolute position, optionally holding the left button */
-    const z = zone(spec, parent); let lx = 0, ly = 0;
-    const dy = spec.dy || 0;
+  function mkDrag(spec, parent) {                                                               /* a finger acting as the mouse: absolute position; fire:true holds the left button while touching, tapFire clicks on a short tap, fireKey holds a key while touching */
+    const z = zone(spec, parent); let lx = 0, ly = 0, t0 = 0, dist = 0, fk = null;
+    const dy = spec.dy || 0, usePointer = spec.events === 'pointer';
+    const moveTo = (x, y, mx, my) => (usePointer ? pointer('pointermove', x, y + dy, 1) : mouse('mousemove', x, y + dy, 0, mx, my));
     const c = claim(z, {
-      down(e) { lx = e.clientX; ly = e.clientY; mouse('mousemove', lx, ly + dy, 0, 1, 1); if (spec.fire !== false) mouse('mousedown', lx, ly + dy, 0); if (spec.fireKey) hold(spec.fireKey); },
-      move(e) { const mx = e.clientX - lx, my = e.clientY - ly; lx = e.clientX; ly = e.clientY; if (mx || my) mouse('mousemove', lx, ly + dy, 0, mx, my); },
-      up() { if (spec.fire !== false) mouse('mouseup', lx, ly + dy, 0); if (spec.fireKey) drop(spec.fireKey); },
+      down(e) {
+        lx = e.clientX; ly = e.clientY; t0 = performance.now(); dist = 0; moveTo(lx, ly, 1, 1);
+        if (spec.fire !== false && !usePointer) mouse('mousedown', lx, ly + dy, 0);
+        fk = typeof spec.fireKey === 'function' ? spec.fireKey() : spec.fireKey; if (fk) hold(fk);
+      },
+      move(e) { const mx = e.clientX - lx, my = e.clientY - ly; lx = e.clientX; ly = e.clientY; dist += Math.abs(mx) + Math.abs(my); if (mx || my) moveTo(lx, ly, mx, my); },
+      up() {
+        if (spec.fire !== false && !usePointer) mouse('mouseup', lx, ly + dy, 0);
+        else if (spec.tapFire && dist < 14 && performance.now() - t0 < 320) { const x = lx, y = ly + dy; mouse('mousedown', x, y, 0); setTimeout(() => mouse('mouseup', x, y, 0), 40); }
+        if (fk) { drop(fk); fk = null; }
+      },
     }, spec);
     c.el = z; return c;
   }
@@ -163,15 +177,31 @@
     }, spec);
     c.el = z; return c;
   }
-  const MAKE = { btn: mkButton, stick: mkStick, drag: mkDrag, swipe: mkSwipe, tap: mkTap };
+  function mkAimFire(spec, parent) {                                                            /* a fire button that is also an aim stick: hold = fire (key), drag from the centre = aim; CFG.onAim(nx, ny) gets a unit-ish vector, or null when centred */
+    const b = div('tk-btn tk-aimfire' + (spec.cls ? ' ' + spec.cls : ''), parent, spec.label), knob = div('tk-knob', b), p = spec.pos || {}, sz = spec.size || 96, flip = { l: 'r', r: 'l' };
+    for (const k in p) { const side = st.left && spec.mirror !== false ? flip[k] || k : k, prop = { l: 'left', r: 'right', t: 'top', b: 'bottom' }[side]; b.style[prop] = 'calc(var(--sa' + side + ') + ' + p[k] + 'px)'; }
+    b.style.width = b.style.height = 'calc(var(--k) * ' + sz + 'px)'; b.style.fontSize = 'calc(var(--k) * ' + Math.round(sz * 0.18) + 'px)';
+    const aim = (e) => {
+      const r = b.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, dx = e.clientX - cx, dy = e.clientY - cy, d = Math.hypot(dx, dy), full = r.width * (spec.reach || 0.9), dead = r.width * 0.16;
+      if (d < dead) { knob.style.transform = 'translate(0,0)'; if (spec.onAim) spec.onAim(null); return; }
+      const m = Math.min(d, full) / d; knob.style.transform = 'translate(' + dx * m * 0.5 + 'px,' + dy * m * 0.5 + 'px)'; if (spec.onAim) spec.onAim(dx / d, dy / d);
+    };
+    const c = claim(b, {
+      down(e) { b.classList.add('on'); if (spec.key) hold(spec.key); aim(e); },
+      move(e) { aim(e); },
+      up() { b.classList.remove('on'); if (spec.key) drop(spec.key); knob.style.transform = 'translate(0,0)'; if (spec.onAim) spec.onAim(null); },
+    }, spec);
+    c.el = b; c.spec = spec; return c;
+  }
+  const MAKE = { aimfire: mkAimFire, btn: mkButton, stick: mkStick, drag: mkDrag, swipe: mkSwipe, tap: mkTap };
 
   function build() {
     canvas = D.querySelector(CFG.canvas || '#game');
     if (!root) { root = D.createElement('div'); root.id = 'touch'; (canvas && canvas.parentNode ? canvas.after(root) : D.body.appendChild(root)); root.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false }); }
     ctrls.forEach((c) => c.reset && c.reset()); ctrls = []; root.textContent = '';
     const list = (CFG.controls || []).slice();
-    if (CFG.pause !== false) list.push({ t: 'btn', id: 'pause', label: '| |', key: (CFG.pause && CFG.pause.key) || 'KeyP', hold: false, size: 42, cls: 'tk-small', pos: (CFG.pause && CFG.pause.pos) || { r: 12, t: 10 }, mirror: !!(CFG.pause && CFG.pause.mirror) });
-    list.forEach((s) => { const c = MAKE[s.t](s, root); if (c && c.el) { c.el.dataset.tk = s.id || s.t; c.spec = s; } });
+    if (CFG.pause !== false) list.push({ t: 'btn', id: 'pause', label: '| |', key: (CFG.pause && CFG.pause.key) || 'KeyP', hold: false, size: 42, cls: 'tk-small', when: 'play', pos: (CFG.pause && CFG.pause.pos) || { r: 12, t: 10 }, mirror: !!(CFG.pause && CFG.pause.mirror) });
+    list.forEach((s) => { const c = MAKE[s.t](s, root); if (c && c.el) { c.el.dataset.tk = s.id || s.t; c.el.dataset.when = s.when || 'play'; c.spec = s; } });
     built = true; style();
   }
   function style() {
@@ -181,14 +211,21 @@
   }
 
   /* ---- state: touch on/off, menus, rotate prompt ------------------------------------------------------------------------------------------------------------------------------ */
-  function releaseAll() { ctrls.forEach((c) => c.reset && c.reset()); for (const k in heldKeys) { delete heldKeys[k]; fireKey('keyup', k); } }
+  function releaseAll() { ctrls.forEach((c) => c.reset && c.reset()); for (const k in heldKeys) { delete heldKeys[k]; fireKey('keyup', k); } autoHeld = false; autoSuspend = 0; }
+  /* CFG.autoKeys: keys the layer holds down by itself while a race / level is running (e.g. accelerate), unless a control suspends them (a brake button) */
+  function syncAuto() {
+    const want = !!(CFG.autoKeys && TK.on && !menuState && !rotState && !hid && autoSuspend <= 0);
+    if (want !== autoHeld) { autoHeld = want; CFG.autoKeys.forEach((k) => (want ? hold(k) : drop(k))); }
+  }
+  TK.suspendAuto = (on) => { autoSuspend = Math.max(0, autoSuspend + (on ? 1 : -1)); syncAuto(); };
   function refresh() {
     const on = want();
     if (on !== TK.on) { TK.on = on; D.body.classList.toggle('touch', on); if (on && !built) build(); if (!on) releaseAll(); W.dispatchEvent(new Event('resize')); }
     const menu = menuOpen();
     if (menu !== menuState) { menuState = menu; D.body.classList.toggle('tk-menu', menu); if (menu) releaseAll(); }
-    const need = on && !ignoreRotate && Math.min(W.innerWidth, W.innerHeight) < 700 && W.innerWidth > W.innerHeight !== (CFG.orient === 'landscape');
-    if (need !== rotState) { rotState = need; D.body.classList.toggle('rotate-needed', need); if (need) { releaseAll(); W.dispatchEvent(new Event('blur')); } }
+    const need = on && !ignoreRotate && CFG.orient !== 'any' && Math.min(W.innerWidth, W.innerHeight) < 700 && W.innerWidth > W.innerHeight !== (CFG.orient === 'landscape');
+    if (need !== rotState) { rotState = need; D.body.classList.toggle('rotate-needed', need); if (need) { releaseAll(); W.dispatchEvent(new Event('blur')); try { if (CFG.onRotate) CFG.onRotate(); } catch (e) { /* ignore */ } } }
+    syncAuto();
   }
   TK.refresh = refresh;
 
@@ -202,7 +239,7 @@
   /* ---- settings screen ---------------------------------------------------------------------------------------------------------------------------------------------------------- */
   function buildSettings() {
     const panel = D.querySelector('#settings .panel');
-    if (!panel || !TK.supported) return;
+    if (!panel || !TK.supported || CFG.settings === false) return;
     const g = div('tk-set', panel);
     g.innerHTML = '<h3>TOUCH CONTROLS</h3>' +
       '<label>On-screen controls <select id="tkMode"><option value="auto">Auto</option><option value="on">Always on</option><option value="off">Off</option></select></label>' +
@@ -263,7 +300,17 @@
     const mo = new MutationObserver(refresh), ui = D.getElementById('ui');
     mo.observe(D.body, { attributes: true, attributeFilter: ['class'] }); if (ui) mo.observe(ui, { attributes: true, subtree: true, attributeFilter: ['class'] });
     refresh();
-    if (CFG.tick) setInterval(() => { if (TK.on) CFG.tick(ctrls); }, 120);
+    /* CFG.hide(): the game is on a canvas screen that needs plain taps (upgrade cards, ...), so the controls step aside */
+    /* CFG.screen(): 'play' or 'menu' for games whose menus are drawn on the canvas (controls with when:'menu' show only then); spec.show(): hide a control until it is useful */
+    let scr = 'play';
+    setInterval(() => {
+      if (!TK.on) return;
+      if (autoHeld) CFG.autoKeys.forEach((k) => fireKey('keydown', k, true));          /* like a keyboard's auto-repeat: a game that clears its key state when a race starts picks the held key up again */
+      if (CFG.hide) { const h = !!CFG.hide(); if (h !== hid) { hid = h; D.body.classList.toggle('tk-hide', h); if (h) releaseAll(); syncAuto(); } }
+      if (CFG.screen) { const sc = CFG.screen() === 'menu' ? 'menu' : 'play'; if (sc !== scr) { scr = sc; D.body.classList.toggle('tk-scr-menu', sc === 'menu'); releaseAll(); } }
+      for (const c of ctrls) if (c.spec && c.spec.show && c.el) { const v = !!c.spec.show(); if (c.shown !== v) { c.shown = v; c.el.style.display = v ? '' : 'none'; if (!v && c.reset) c.reset(); } }
+      if (CFG.tick) CFG.tick(ctrls);
+    }, 120);
   }
   if (D.body) init(); else D.addEventListener('DOMContentLoaded', init);
 })();
