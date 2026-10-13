@@ -163,6 +163,7 @@
   M._render = (dt) => render(dt);
   function frame(now) {
     requestAnimationFrame(frame);
+    if (now - last < 10.5) return;                                  /* cap at about 60 fps on 90 / 120 / 144 Hz screens: the loop is fixed-step, so the extra frames only cost battery and heat */
     let dt = (now - last) / 1000;
     last = now;
     if (!(dt > 0)) dt = 1 / 60;
