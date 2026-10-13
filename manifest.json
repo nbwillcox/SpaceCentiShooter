@@ -1,0 +1,38 @@
+{
+  "name": "SpaceCentiShooter",
+  "short_name": "SpaceCentiShooter",
+  "description": "SpaceCentiShooter - a free retro-style space shooter: hold the zone against the Hive Serpent, crack its crystal field and take down Serpent Mother bosses.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "orientation": "portrait",
+  "background_color": "#05071a",
+  "theme_color": "#05071a",
+  "categories": [
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

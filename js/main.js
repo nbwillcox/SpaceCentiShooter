@@ -51,6 +51,7 @@
     const s = Math.min(w / W, h / H);
     view.w = w; view.h = h; view.dpr = dpr; view.s = s;
     view.ox = (w - W * s) / 2; view.oy = (h - H * s) / 2;
+    if (window.TK) window.TK.layout(view, W, H);                           /* touch layout: a portrait playfield sits at the top of a tall phone */
     sizeScene();
     setSize(bgc, Math.ceil(w * BGK), Math.ceil(h * BGK)); bgt.hue = -1;
     initStars();
