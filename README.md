@@ -23,6 +23,7 @@ Play in portrait. Drag anywhere to move the ship around its zone (it hovers just
 
 - The **Hive Serpent** is a chain of segments that zigzags down through the crystal field, turning at every crystal and dropping a row. Shoot a segment and it leaves a crystal behind and the chain splits: the piece behind becomes a new head. Heads are worth more.
 - Every level brings **more centipedes**: extra full chains entering from both sides, a growing swarm of solo heads, and more speed.
+- **The hive escalates after every Serpent Mother, exponentially.** Each boss you beat doubles the length of the centipedes (x2, x4, x8), adds another chain, multiplies the solo heads and makes everything tougher and faster. Crystal blockers get tougher (4 hits, then 6, 10, 16, 26...) and the field gets denser, pests come 25% more often and in greater numbers, from the first escalation on the heads spit aimed shots at you (a fan at higher tiers, ever more often), and every boss is longer, tougher, faster and fires wider fans and bigger rings.
 - Once the chain reaches your zone it bounces up and down inside it, and extra solo heads sneak in from the sides. Touching anything dangerous costs a life.
 - **Crystals** crack over 4 hits. The field fully resets every level: your zone is cleared, damaged crystals repair themselves for bonus points, and destroyed ones regrow, with a denser field each level.
 - **Pests** (more of them, more often, as levels climb):

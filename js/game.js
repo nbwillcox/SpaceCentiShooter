@@ -354,6 +354,10 @@
   /* ---------- level flow ---------- */
   Game.startStage = function (n) {
     this.stage = n; this.stageTime = 0; this.perfect = true; this.repair = null;
+    const tier = this.tier = G.tierOf(n);
+    F.maxHp = Math.round(4 * 1.6 ** tier);                                 /* crystals: 4 hits, then 6, 10, 16, 26 ... */
+    for (const k of F.cells) if (k) { k.max = F.maxHp; k.hp = k.max; }
+    this.maxEB = Math.min(120, 40 + 10 * tier);
     this.world = Math.floor((n - 1) / C.BOSS_EVERY) % 5;
     this.clearEnemyBullets(false);
     Ch.reset(this); P.reset(this);
@@ -364,7 +368,7 @@
       if (!this.demo) { A.sfx.warning(); A.music('boss', 3, key); }
     } else {
       this.state = 'intro'; this.timer = 1.7;
-      this.banner = { text: 'LEVEL ' + n, sub: '', t: 0, life: 1.7 };
+      this.banner = { text: 'LEVEL ' + n, sub: tier > 0 && (n - 1) % C.BOSS_EVERY === 0 ? 'THE HIVE EVOLVES  -  ESCALATION ' + tier : '', t: 0, life: tier > 0 && (n - 1) % C.BOSS_EVERY === 0 ? 2.6 : 1.7 };
       if (!this.demo) A.music('play', n >= 3 ? 2 : 1, key);
     }
     G.onStage && G.onStage(n);
@@ -390,7 +394,7 @@
         this.timer -= dt;
         if (this.timer <= 0) {
           Ch.spawnWave(this, this.stage);
-          this.thiefAt = this.stage >= 3 && Math.random() < 0.5 ? U.rand(9, 18) : 0;
+          this.thiefAt = this.stage >= 3 && Math.random() < Math.min(0.9, 0.5 + 0.1 * this.tier) ? U.rand(9, 18) : 0;
           this.state = 'play';
         }
         break;
@@ -418,7 +422,7 @@
         while (R.t <= 0) {
           if (R.phase === 0) {
             if (R.zone.length) { const k = R.zone.shift(); if (F.get(k.c, k.r) === k) { FX.sparks(F.cx(k.c), F.cy(k.r), 6, 120, 'hsla(200,100%,70%,1)', 0.35); F.remove(k.c, k.r); A.sfx.crystalBreak(); } R.t += fast ? 0.01 : 0.04; }
-            else { R.phase = 1; while (F.count > 56) { const ks = F.cells.filter(Boolean); const k = ks[Math.floor(Math.random() * ks.length)]; FX.sparks(F.cx(k.c), F.cy(k.r), 5, 110, 'hsla(200,100%,70%,1)', 0.3); F.remove(k.c, k.r); } R.damaged = F.damaged().sort((x, y) => x.r - y.r || x.c - y.c); }
+            else { R.phase = 1; while (F.count > Math.min(130, 56 + 14 * this.tier)) { const ks = F.cells.filter(Boolean); const k = ks[Math.floor(Math.random() * ks.length)]; FX.sparks(F.cx(k.c), F.cy(k.r), 5, 110, 'hsla(200,100%,70%,1)', 0.3); F.remove(k.c, k.r); } R.damaged = F.damaged().sort((x, y) => x.r - y.r || x.c - y.c); }
           } else if (R.phase === 1) {
             if (R.damaged.length) { const k = R.damaged.shift(); if (F.get(k.c, k.r) === k) { F.repair(k); R.n++; if (!this.demo) { this.addScore(5); A.sfx.repair(R.n); } } R.t += fast ? 0.01 : 0.06; }
             else { R.grow = F.planFill(F.target(this.stage + 1)); R.phase = 2; }
@@ -427,7 +431,7 @@
             else { R.phase = 3; }
           } else break;
         }
-        if (R.phase === 3) { if (!R.swept) { R.swept = true; for (const k of F.damaged()) F.repair(k); } R.end -= dt; if (R.end <= 0) { for (const k of F.damaged()) { k.hp = 4; k.poison = false; } this.startStage(this.stage + 1); } }
+        if (R.phase === 3) { if (!R.swept) { R.swept = true; for (const k of F.damaged()) F.repair(k); } R.end -= dt; if (R.end <= 0) { for (const k of F.damaged()) F.repair(k); this.startStage(this.stage + 1); } }
         break;
       }
       default:

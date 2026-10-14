@@ -16,7 +16,7 @@
   P.TYPES = T;
 
   function make(g, type, x, y) {
-    const hp = T[type].hp + (type === 'thief' ? Math.floor(g.stage / 6) : 0);
+    const hp = T[type].hp + (type === 'thief' ? Math.floor(g.stage / 6) : 0) + Math.floor((g.tier || 0) * 0.6);
     return { id: ++uid, type, x, y, vx: 0, vy: 0, r: T[type].r, hp, maxHp: hp, t: 0, anim: Math.random() * 5, flash: 0, dead: false, zt: 0, lastRow: -9, loot: null, state: 'go', dir: 1 };
   }
 
@@ -26,18 +26,18 @@
   };
 
   P.spawn = function (g, type) {
-    const n = g.stage;
+    const n = g.stage, sp = 1.08 ** (g.tier || 0);
     if (type === 'skitter') {
       const left = Math.random() < 0.5, p = make(g, type, left ? -24 : W + 24, U.rand(C.ZONE_Y0 - 60, H - 60));
-      p.dir = left ? 1 : -1; p.vx = p.dir * (115 + n * 4); p.vy = U.chance(0.5) ? 110 : -110; p.zt = U.rand(0.3, 0.8);
+      p.dir = left ? 1 : -1; p.vx = p.dir * (115 + n * 4) * sp; p.vy = U.chance(0.5) ? 110 : -110; p.zt = U.rand(0.3, 0.8);
       g.pests.push(p);
     } else if (type === 'dropper') {
       const p = make(g, type, F.cx(U.randInt(1, C.COLS - 2)), C.GY - 14);
-      p.vy = 125 + n * 3;
+      p.vy = (125 + n * 3) * sp;
       g.pests.push(p);
     } else if (type === 'venom') {
       const left = Math.random() < 0.5, row = U.randInt(2, C.ZONE_TOP - 1), p = make(g, type, left ? -30 : W + 30, F.cy(row));
-      p.dir = left ? 1 : -1; p.vx = p.dir * (88 + n * 2); p.baseY = p.y;
+      p.dir = left ? 1 : -1; p.vx = p.dir * (88 + n * 2) * sp; p.baseY = p.y;
       g.pests.push(p);
     } else {
       const p = make(g, 'thief', U.chance(0.5) ? 70 : W - 70, -30);
@@ -98,12 +98,12 @@
     for (const p of g.pests) update1(g, p, dt);
     for (let i = g.pests.length - 1; i >= 0; i--) if (g.pests[i].dead) { g.pests[i] = g.pests[g.pests.length - 1]; g.pests.pop(); }
     if (g.state !== 'play' || g.over) return;
-    const n = g.stage, t = g.pestT;
+    const n = g.stage, t = g.pestT, k = g.tier || 0, rate = 1.25 ** k;                    /* every tier: 25% more often, and room for one more of each at a time */
     const count = (type) => g.pests.filter((p) => p.type === type).length;
     t.skitter -= dt; t.dropper -= dt; if (n >= 2) t.venom -= dt;
-    if (t.skitter <= 0) { t.skitter = U.rand(9, 15) / (1 + 0.06 * n); if (count('skitter') < Math.min(3, 1 + Math.floor(n / 5))) P.spawn(g, 'skitter'); }
-    if (t.dropper <= 0) { t.dropper = (F.count < 20 ? U.rand(4, 7) : U.rand(11, 17)) / (1 + 0.05 * n); if (count('dropper') < Math.min(3, 1 + Math.floor(n / 4))) P.spawn(g, 'dropper'); }
-    if (n >= 2 && t.venom <= 0) { t.venom = U.rand(14, 22) / (1 + 0.05 * n); if (count('venom') < Math.min(3, 1 + Math.floor(n / 6))) P.spawn(g, 'venom'); }
+    if (t.skitter <= 0) { t.skitter = U.rand(9, 15) / (1 + 0.06 * n) / rate; if (count('skitter') < Math.min(3, 1 + Math.floor(n / 5)) + k) P.spawn(g, 'skitter'); }
+    if (t.dropper <= 0) { t.dropper = (F.count < 20 ? U.rand(4, 7) : U.rand(11, 17)) / (1 + 0.05 * n) / rate; if (count('dropper') < Math.min(3, 1 + Math.floor(n / 4)) + k) P.spawn(g, 'dropper'); }
+    if (n >= 2 && t.venom <= 0) { t.venom = U.rand(14, 22) / (1 + 0.05 * n) / rate; if (count('venom') < Math.min(3, 1 + Math.floor(n / 6)) + k) P.spawn(g, 'venom'); }
     if (g.thiefAt > 0 && g.stageTime > g.thiefAt) { g.thiefAt = 0; P.spawn(g, 'thief'); }
   };
 

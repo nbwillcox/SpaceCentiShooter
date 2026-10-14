@@ -19,21 +19,27 @@
     return ch;
   }
 
-  Ch.reset = function (g) { g.chains = []; g.pendingSolo = []; g.harassT = 8; };
+  Ch.reset = function (g) { g.chains = []; g.pendingSolo = []; g.harassT = 8; g.spitT = 3; };
 
-  /* More centipedes every level: several full chains plus a growing swarm of solo heads. */
+  /* More centipedes every level: several full chains plus a growing swarm of solo heads. After every Serpent Mother (tier k) the chains are twice as long (x2, x4, x8), there is one more
+     chain, the solo heads multiply, everything has more hit points and the chains move faster. */
   Ch.spawnWave = function (g, n) {
+    const k = g.tier || 0, grow = 2 ** Math.min(k, 3);
     const segTotal = Math.min(36, 12 + Math.floor(1.6 * (n - 1)));
-    const solos = Math.min(n - 1, 8);
-    const body = segTotal - solos;
-    const chains = Math.max(1, Math.min(1 + Math.floor((n - 1) / 2), 5, Math.floor(body / 3)));
-    const hpHead = 1 + Math.floor((n - 1) / 8), hpBody = 1 + Math.floor((n - 1) / 14);
-    g.chainSpeed = Math.min(13, 5.2 + 0.4 * n);
+    const solos0 = Math.min(n - 1, 8);
+    const body = segTotal - solos0;
+    const chains0 = Math.max(1, Math.min(1 + Math.floor((n - 1) / 2), 5, Math.floor(body / 3)));
+    const hpHead = 1 + Math.floor((n - 1) / 8) + k, hpBody = 1 + Math.floor((n - 1) / 14) + Math.floor(k / 2);
+    g.chainSpeed = Math.min(13, 5.2 + 0.4 * n) * Math.min(1.45, 1.1 ** k);
     const lens = [];
-    for (let i = 0; i < chains; i++) lens.push(Math.floor(body / chains) + (i < body % chains ? 1 : 0));
-    lens.forEach((len, i) => g.pendingSolo.push({ t: i === 0 ? 0 : 1.4 * i + Math.random() * 0.6, side: i % 2, hp: hpHead, hpBody, len }));
-    for (let j = 0; j < solos; j++) g.pendingSolo.push({ t: 2.4 + j * 1.0 + Math.random() * 0.8, side: j % 2, hp: hpHead });
-    g.carriersLeft = Math.min(4, 1 + Math.floor(n / 4));
+    for (let i = 0; i < chains0; i++) lens.push(Math.floor(body / chains0) + (i < body % chains0 ? 1 : 0));
+    const base = lens.slice();
+    for (let i = 0; i < Math.min(k, 4); i++) lens.push(base[i % base.length]);
+    const gap = 1 / (1 + 0.3 * k);
+    lens.forEach((len, i) => g.pendingSolo.push({ t: i === 0 ? 0 : (1.4 * i + Math.random() * 0.6) * gap, side: i % 2, hp: hpHead, hpBody, len: Math.min(64, len * grow) }));
+    const solos = solos0 * (1 + k);
+    for (let j = 0; j < solos; j++) g.pendingSolo.push({ t: 2.4 + (j * 1.0 + Math.random() * 0.8) * gap, side: j % 2, hp: hpHead });
+    g.carriersLeft = Math.min(4 + 2 * k, 1 + Math.floor(n / 4) + k);
   };
 
   function spawnChain(g, o) {
@@ -102,10 +108,23 @@
     }
     if (g.state === 'play' && inZone && !g.over) {
       g.harassT -= dt;
-      const cap = Math.min(6, 1 + Math.floor(g.stage / 3));
+      const k = g.tier || 0, cap = Math.min(6, 1 + Math.floor(g.stage / 3)) + Math.min(k, 4);
       if (g.harassT <= 0) {
-        g.harassT = Math.max(4, 10 - g.stage * 0.5);
-        if (harassers < cap) Ch.spawnSolo(g, { harasser: true, row: U.randInt(C.ZONE_TOP, BOTTOM), vdir: Math.random() < 0.5 ? 1 : -1, hp: 1 + Math.floor((g.stage - 1) / 8) });
+        g.harassT = Math.max(2.5, (10 - g.stage * 0.5) / 1.2 ** k);
+        if (harassers < cap) Ch.spawnSolo(g, { harasser: true, row: U.randInt(C.ZONE_TOP, BOTTOM), vdir: Math.random() < 0.5 ? 1 : -1, hp: 1 + Math.floor((g.stage - 1) / 8) + Math.floor(k / 2) });
+      }
+    }
+    /* from the first escalation on the heads spit at you: one aimed shot (a fan at higher tiers) from a random head on the field, more often every tier */
+    if ((g.tier || 0) > 0 && g.state === 'play' && !g.over && g.player.alive) {
+      g.spitT -= dt;
+      if (g.spitT <= 0) {
+        const k = g.tier;
+        g.spitT = Math.max(0.3, 2.4 / 1.5 ** k);
+        const heads = g.chains.filter((c) => c.required && c.segs.length && c.segs[0].cy >= 1 && c.segs[0].cx >= 0 && c.segs[0].cx < C.COLS);
+        if (heads.length) {
+          const ch = U.pick(heads), pos = Ch.segPos(ch, ch.segs[0], { x: 0, y: 0 }), pl = g.player, a = Math.atan2(pl.y - pos.y, pl.x - pos.x), n = k >= 3 ? 2 : k >= 2 ? 1 : 0, sp = 205 + 12 * k;
+          for (let q = -n; q <= n; q++) g.ebullet(pos.x, pos.y, Math.cos(a + q * 0.2) * sp, Math.sin(a + q * 0.2) * sp, 'orb', 5);
+        }
       }
     }
     for (let i = g.chains.length - 1; i >= 0; i--) if (!g.chains[i].segs.length) g.chains.splice(i, 1);

@@ -22,19 +22,19 @@
 
   B.create = function (g, stage) {
     const k = Math.round(stage / C.BOSS_EVERY) - 1, idx = k % DEFS.length, loop = Math.floor(k / DEFS.length);
-    const def = DEFS[idx], hpMul = 1 + 0.5 * loop;
+    const def = DEFS[idx], hpMul = 1.3 ** k, nPlates = Math.min(46, def.plates + 3 * k), gunEvery = Math.max(1, def.gunEvery - Math.floor(k / 3));     /* k = Serpent Mothers beaten so far */
     const plates = [];
-    for (let i = 0; i < def.plates; i++) {
-      plates.push({ id: 'p' + i, alive: true, hp: Math.ceil(def.hp * hpMul), max: Math.ceil(def.hp * hpMul), gun: i % def.gunEvery === def.gunEvery - 1, flash: 0, cd: U.rand(1.5, 3.8), x: W / 2, y: -200, ang: 0 });
+    for (let i = 0; i < nPlates; i++) {
+      plates.push({ id: 'p' + i, alive: true, hp: Math.ceil(def.hp * hpMul), max: Math.ceil(def.hp * hpMul), gun: i % gunEvery === gunEvery - 1, flash: 0, cd: U.rand(1.5, 3.8), x: W / 2, y: -200, ang: 0 });
     }
     const hhp = Math.ceil(150 * hpMul);
     const b = {
-      def, idx, loop, state: 'enter', t: 0, ft: 0, plates, art: GFX.art.boss(def.hue), name: B.nameFor(stage),
+      def, idx, loop, k, state: 'enter', t: 0, ft: 0, plates, art: GFX.art.boss(def.hue), name: B.nameFor(stage),
       head: { hp: hhp, max: hhp, flash: 0, x: W / 2, y: -120, ang: 0, cd: 2.5 }, trail: [], D: 0,
       shielded: true, destroyed: 0, seedT: 1.5, spawnT: 12, ringT: 5, sp: 0, spT: 2, sang: 0, shieldFlash: 0, dying: 0, deathFx: 0,
       total: plates.length * Math.ceil(def.hp * hpMul) + hhp, ph: Math.asin(-20 / def.B),
     };
-    const need = def.plates * SP + 160;
+    const need = nPlates * SP + 160;
     for (let d = need; d >= 0; d -= 4) b.trail.push({ x: W / 2, y: -120 - d, d: -d });
     return b;
   };
@@ -75,7 +75,7 @@
       h.x = W / 2; h.y = -120 + 290 * U.smooth(k);
       if (k >= 1) { b.state = 'fight'; b.ft = 0; }
     } else {
-      b.ft += dt * (1 + 0.04 * b.destroyed + 0.06 * b.loop);
+      b.ft += dt * (1 + 0.04 * b.destroyed + 0.05 * Math.min(b.k, 12));
       h.x = W / 2 + b.def.A * Math.sin(b.def.w * b.ft);
       h.y = 190 + b.def.B * Math.sin(b.def.w * 0.7 * b.ft + b.ph);
     }
@@ -89,7 +89,7 @@
     }
     placeParts(b);
     if (b.state !== 'fight') return;
-    const loopMul = 1 + 0.12 * b.loop, rate = (1 + 0.08 * b.destroyed) * loopMul * (g.demo ? 0.7 : 1), sp = (175 + 14 * b.loop) * (g.demo ? 0.85 : 1);
+    const loopMul = Math.min(4, 1.12 ** b.k), rate = (1 + 0.08 * b.destroyed) * loopMul * (g.demo ? 0.7 : 1), sp = Math.min(340, 175 + 10 * b.k) * (g.demo ? 0.85 : 1);
     for (const pl of b.plates) {
       if (!pl.alive || !pl.gun || h.y < 40) continue;
       pl.cd -= dt * rate;
@@ -97,22 +97,23 @@
         pl.cd = 3.4;
         if (!g.player.alive) continue;
         const a = Math.atan2(g.player.y - pl.y, g.player.x - pl.x);
-        if (b.def.atk === 'fan') for (let i = -1; i <= 1; i++) fire(g, pl.x, pl.y, a + i * 0.26, sp, 'needle', 4);
-        else fire(g, pl.x, pl.y, a, sp, 'orb', 5);
+        const fw = 1 + (b.k >= 2 ? 1 : 0) + (b.k >= 4 ? 1 : 0);                      /* the fans get wider with every escalation */
+        if (b.def.atk === 'fan') for (let i = -fw; i <= fw; i++) fire(g, pl.x, pl.y, a + i * 0.26, sp, 'needle', 4);
+        else { fire(g, pl.x, pl.y, a, sp, 'orb', 5); for (let i = 1; i <= Math.min(3, b.k); i++) { fire(g, pl.x, pl.y, a + i * 0.12, sp, 'orb', 5); fire(g, pl.x, pl.y, a - i * 0.12, sp, 'orb', 5); } }
       }
     }
     headAttack(g, b, dt, rate, sp);
     b.seedT -= dt;
     if (b.seedT <= 0) {
-      b.seedT = 1.6;
+      b.seedT = 1.6 / 1.2 ** Math.min(b.k, 6);
       const tail = b.plates.filter((q) => q.alive).pop() || { x: h.x, y: h.y };
       const c = F.col(tail.x), r = F.row(tail.y);
-      if (r >= 1 && r < C.ZONE_TOP - 1 && F.count < 48 && !F.get(c, r)) { F.add(c, r); FX.sparks(F.cx(c), F.cy(r), 4, 80, FX.col(b.def.hue), 0.3); }
+      if (r >= 1 && r < C.ZONE_TOP - 1 && F.count < 48 + 10 * Math.min(b.k, 5) && !F.get(c, r)) { F.add(c, r); FX.sparks(F.cx(c), F.cy(r), 4, 80, FX.col(b.def.hue), 0.3); }
     }
     b.spawnT -= dt;
     if (b.spawnT <= 0) {
-      b.spawnT = 14;
-      if (g.chains.filter((q) => q.harasser).length < 2) Ch.spawnSolo(g, { harasser: true, row: U.randInt(C.ZONE_TOP, C.ROWS - 1), vdir: U.chance(0.5) ? 1 : -1, hp: 1 });
+      b.spawnT = Math.max(5, 14 / 1.3 ** b.k);
+      if (g.chains.filter((q) => q.harasser).length < 2 + Math.min(b.k, 6)) Ch.spawnSolo(g, { harasser: true, row: U.randInt(C.ZONE_TOP, C.ROWS - 1), vdir: U.chance(0.5) ? 1 : -1, hp: 1 + Math.floor(b.k / 2) });
     }
   };
 
@@ -123,11 +124,12 @@
       if (h.cd <= 0 && g.player.alive) {
         h.cd = 3.6;
         const a = Math.atan2(g.player.y - h.y, g.player.x - h.x);
-        for (let i = -1; i <= 1; i++) fire(g, h.x, h.y + 10, a + i * 0.3, sp * 1.05, 'needle', 4);
+        const hw = 1 + Math.floor(b.k / 2);
+        for (let i = -hw; i <= hw; i++) fire(g, h.x, h.y + 10, a + i * 0.3, sp * 1.05, 'needle', 4);
       }
       if (b.def.atk === 'ring') {
         b.ringT -= dt;
-        if (b.ringT <= 0) { b.ringT = 6.5; for (let i = 0; i < 12; i++) fire(g, h.x, h.y, i / 12 * TAU, sp * 0.7, 'orb', 5); FX.ring(h.x, h.y, 10, 80, FX.col(b.def.hue), 0.5, 3); }
+        if (b.ringT <= 0) { b.ringT = 6.5; { const n = Math.min(36, 12 + 3 * b.k); for (let i = 0; i < n; i++) fire(g, h.x, h.y, i / n * TAU, sp * 0.7, 'orb', 5); } FX.ring(h.x, h.y, 10, 80, FX.col(b.def.hue), 0.5, 3); }
       }
       return;
     }
@@ -136,13 +138,14 @@
       b.sp -= dt;
       if (b.sp <= 0) {
         b.sp = 0.12; b.sang += 0.42;
-        for (let q = 0; q < 2; q++) fire(g, h.x, h.y, b.sang + q * Math.PI, sp * 0.85, 'needle', 4);
+        const arms = 2 + Math.min(4, Math.floor(b.k / 2));
+        for (let q = 0; q < arms; q++) fire(g, h.x, h.y, b.sang + q * TAU / arms, sp * 0.85, 'needle', 4);
       }
     } else if (b.spT < -1.5) b.spT = 2.4;
     b.ringT -= dt;
     if (b.ringT <= 0) {
       b.ringT = 5;
-      for (let i = 0; i < 16; i++) fire(g, h.x, h.y, i / 16 * TAU, sp * 0.75, 'orb', 5);
+      { const n = Math.min(44, 16 + 4 * b.k); for (let i = 0; i < n; i++) fire(g, h.x, h.y, i / n * TAU, sp * 0.75, 'orb', 5); }
       FX.ring(h.x, h.y, 10, 100, 'hsla(0,100%,65%,1)', 0.5, 3);
     }
   }

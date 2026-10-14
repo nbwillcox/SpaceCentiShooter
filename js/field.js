@@ -2,7 +2,7 @@
 (function (G) {
   'use strict';
   const U = G.U, C = G.C, FX = G.fx, GFX = G.gfx, A = G.audio;
-  const F = { cells: [], count: 0 };
+  const F = { cells: [], count: 0, maxHp: 4 };                                   /* maxHp grows with the escalation tier: stronger blockers */
   G.field = F;
 
   F.cx = (c) => c * C.CELL + C.CELL / 2;
@@ -18,14 +18,14 @@
   };
   F.add = function (c, r, poison) {
     if (!F.inGrid(c, r) || F.get(c, r)) return null;
-    const k = { hp: 4, c, r, poison: !!poison, v: U.randInt(0, 2), flash: 0, pop: 0.3 };
+    const k = { hp: F.maxHp, max: F.maxHp, c, r, poison: !!poison, v: U.randInt(0, 2), flash: 0, pop: 0.3 };
     F.cells[r * C.COLS + c] = k; F.count++;
     return k;
   };
   F.remove = function (c, r) {
     if (F.get(c, r)) { F.cells[r * C.COLS + c] = null; F.count--; }
   };
-  F.target = (n) => Math.min(40, 27 + n);
+  F.target = (n) => { const t = G.tierOf(n); return Math.min(40 + 12 * t, 27 + n + 8 * t, 96); };     /* a denser field after every boss */
   /* positions that would restore the field to n crystals above the player zone */
   F.planFill = function (n) {
     const plan = [], taken = new Set();
@@ -77,11 +77,11 @@
   };
   F.damaged = function () {
     const out = [];
-    for (const k of F.cells) if (k && (k.hp < 4 || k.poison)) out.push(k);
+    for (const k of F.cells) if (k && (k.hp < (k.max || 4) || k.poison)) out.push(k);
     return out;
   };
   F.repair = function (k) {
-    k.hp = 4; k.poison = false; k.pop = 0.3; k.flash = 0.15;
+    k.max = F.maxHp; k.hp = k.max; k.poison = false; k.pop = 0.3; k.flash = 0.15;
     const x = F.cx(k.c), y = F.cy(k.r);
     FX.ring(x, y, 4, 24, 'hsla(190,100%,75%,1)', 0.3, 2);
     FX.sparks(x, y, 4, 90, 'hsla(190,100%,80%,1)', 0.3);
@@ -106,7 +106,7 @@
     const A2 = GFX.art;
     for (const k of F.cells) {
       if (!k) continue;
-      const x = F.cx(k.c), y = F.cy(k.r), dmg = U.clamp(4 - Math.ceil(k.hp), 0, 3);
+      const x = F.cx(k.c), y = F.cy(k.r), dmg = U.clamp(Math.ceil((1 - k.hp / (k.max || 4)) * 3 - 1e-9), 0, 3);
       const sc = k.pop > 0 ? 1 + k.pop * 1.2 : 1;
       if (k.poison) {
         ctx.globalCompositeOperation = 'lighter';

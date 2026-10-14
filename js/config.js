@@ -23,6 +23,8 @@
     SHIELD_TIME: 14,
     SHIP_SCALE: 0.5,
   };
+  /* escalation tier: how many Serpent Mothers have been beaten when level n starts (levels 1-5: 0, 6-10: 1, ...). Everything in the hive grows exponentially with it. */
+  G.tierOf = (n) => Math.max(0, Math.floor((n - 1) / G.C.BOSS_EVERY));
   G.C.ZONE_Y0 = G.C.GY + G.C.ZONE_TOP * CELL;
   G.C.ZONE_Y1 = G.C.GY + G.C.ROWS * CELL;
 

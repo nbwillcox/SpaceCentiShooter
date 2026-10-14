@@ -107,7 +107,7 @@
     rest.style.left = (st.left && spec.mirror !== false ? 1 - at[0] : at[0]) * 100 + '%'; rest.style.top = at[1] * 100 + '%';
     ring.dataset.when = rest.dataset.when = spec.when || 'play';
     rest.style.setProperty('--r', 'calc(var(--k) * ' + (spec.r || 56) + 'px)');
-    let ox = 0, oy = 0, held = {}, axis = '';
+    let ox = 0, oy = 0, held = {}, axis = '', holding = false;
     const place = () => { ring.style.left = ox + 'px'; ring.style.top = oy + 'px'; };
     function setKeys(want) {
       for (const k in held) if (!want[k]) { drop(k); delete held[k]; }
@@ -117,10 +117,11 @@
       let dx = e.clientX - ox, dy = e.clientY - oy; const r = R(), d = Math.hypot(dx, dy);
       if (d > r) { const f = (d - r) / d; if (spec.follow !== false) { ox += dx * f; oy += dy * f; place(); } dx -= dx * f; dy -= dy * f; }          /* the stick follows a thumb that drifts */
       knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-      const th = r * (spec.dead || 0.3), want = {}, mode = spec.mode || '4';
+      const th = r * (spec.dead || 0.3), thy = r * (spec.deadY || spec.dead || 0.3), want = {}, mode = spec.mode || '4';
       if (spec.onMove) spec.onMove(dx / r, dy / r);
+      if (spec.holdKey) { const on = Math.hypot(dx, dy) >= r * (spec.holdAt || 0.3); if (on !== holding) { holding = on; if (on) hold(spec.holdKey); else drop(spec.holdKey); } }                  /* holdKey: a key held while the stick is pushed (an aim stick that also fires) */
       if (mode === 'h') { if (dx < -th) want[K.l] = 1; else if (dx > th) want[K.r] = 1; }
-      else if (mode === '8') { if (dx < -th) want[K.l] = 1; else if (dx > th) want[K.r] = 1; if (dy < -th) want[K.u] = 1; else if (dy > th) want[K.d] = 1; }
+      else if (mode === '8') { if (dx < -th) want[K.l] = 1; else if (dx > th) want[K.r] = 1; if (dy < -thy) want[K.u] = 1; else if (dy > thy) want[K.d] = 1; }
       else {                                                                                  /* 4-way: the stronger axis wins, with a little stickiness so it doesn't flicker on a diagonal */
         const ax = Math.abs(dx) * (axis === 'x' ? 1.3 : 1), ay = Math.abs(dy) * (axis === 'y' ? 1.3 : 1);
         if (Math.max(ax, ay) > th) { if (ax >= ay) { axis = 'x'; want[dx < 0 ? K.l : K.r] = 1; } else { axis = 'y'; want[dy < 0 ? K.u : K.d] = 1; } } else axis = '';
@@ -130,7 +131,7 @@
     const c = claim(z, {
       down(e) { ox = e.clientX; oy = e.clientY; place(); ring.classList.add('on'); rest.classList.add('off'); knob.style.transform = 'translate(0,0)'; axis = ''; if (spec.onMove) spec.onMove(0, 0); },
       move: upd,
-      up() { ring.classList.remove('on'); rest.classList.remove('off'); setKeys({}); if (spec.onMove) spec.onMove(0, 0); },
+      up() { ring.classList.remove('on'); rest.classList.remove('off'); setKeys({}); if (holding) { holding = false; drop(spec.holdKey); } if (spec.onMove) spec.onMove(0, 0); },
     }, spec);
     c.el = z; return c;
   }
