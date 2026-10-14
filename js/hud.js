@@ -64,10 +64,19 @@
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx + 30, 58, 44, 5);
       ctx.fillStyle = '#ffd24a'; ctx.fillRect(bx + 30, 58, 44 * Math.max(0, g.comboT / 2.4), 5);
     }
-    for (let i = 0; i < C.MAX_TIER; i++) {
-      ctx.fillStyle = i < p.tier ? '#ffd24a' : 'rgba(255,255,255,0.18)';
-      if (i < p.tier) { ctx.globalAlpha = 0.55; ctx.drawImage(GFX.glow('rgba(255,210,74,1)'), W / 2 - 46 + i * 20, 47, 32, 28); ctx.globalAlpha = 1; }
-      ctx.fillRect(W / 2 - 38 + i * 20, 58, 16, 6);
+    const nPips = g.maxTier(), step = nPips > 6 ? 16 : 20, px0 = W / 2 - (nPips * step - (step - 16)) / 2;
+    for (let i = 0; i < nPips; i++) {
+      const over = i >= C.MAX_TIER, col = over ? '#ff8a3d' : '#ffd24a';
+      ctx.fillStyle = i < p.tier ? col : 'rgba(255,255,255,0.18)';
+      if (i < p.tier) { ctx.globalAlpha = 0.55; ctx.drawImage(GFX.glow(over ? 'rgba(255,138,61,1)' : 'rgba(255,210,74,1)'), px0 - 8 + i * step, 47, 32, 28); ctx.globalAlpha = 1; }
+      ctx.fillRect(px0 + i * step, 58, step - 4, 6);
+    }
+    if (g.perm && g.perm.n > 0) {
+      const pm = g.perm, bits = ['DMG +' + Math.round((pm.dmg - 1) * 100) + '%'];
+      if (pm.rate > 1) bits.push('RATE +' + Math.round((pm.rate - 1) * 100) + '%');
+      if (pm.drones) bits.push('WINGS +' + pm.drones);
+      if (pm.bombs) bits.push('BOMBS +' + pm.bombs);
+      txt(ctx, bits.join('  '), 16, 86, 10, '#ffd24a', 'left', 800);
     }
     if (p.shield > 0) {
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(W / 2 - 40, 68, 80, 3);

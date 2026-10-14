@@ -32,11 +32,12 @@ Play in portrait. Drag anywhere to move the ship around its zone (it hovers just
   - **Venom drone:** crosses sideways poisoning crystals. A chain that bumps poison plunges straight to the bottom.
   - **Thief:** steals a power-up on contact and flees. Shoot it down to get the loot back.
 - **Power-ups** drop from glowing carrier segments and bosses:
-  - **W** weapon tier: single → double → spread → piercing lances (a hit drops you one tier)
+  - **W** weapon tier: single → double → spread → piercing lances (a hit drops you one tier). Every Serpent Mother you destroy unlocks one more **overcharge** tier (up to tier 9): another lance and two more bolts per volley, a little faster each time
   - **D** wingman drone (up to 2)
   - **S** shield bubble
   - **B** smart bomb
 - Chain kills for a score multiplier (up to x8) and clear a level without being hit for a Perfect bonus.
+- **Boss rewards:** every Serpent Mother you destroy gives a permanent upgrade for the rest of the run, in rotation: +15% damage, +1 wingman slot (and a free wingman), +1 smart-bomb slot (and a free bomb), +10% fire rate. They show in the HUD under your lives.
 - Every 5th level is a **Serpent Mother**: a giant armored chain weaving across the field. Shoot its armor plates off one at a time, then destroy the head's exposed core. Five unique bosses, scaling up each loop.
 - Local top-10 high scores with arcade-style 3-letter initials (stored in your browser).
 

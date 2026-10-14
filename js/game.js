@@ -8,12 +8,13 @@
 
   const SPAWN = { x: W / 2, y: H - 44 };
   function newPlayer() {
-    return { x: SPAWN.x, y: SPAWN.y, alive: true, tier: 1, drones: 0, shield: 0, bombs: 1, fireCd: 0, invuln: 2, respawn: 0, tilt: 0, t: 0, dx: [-26, 26], dy: [6, 6], bombCd: 0, hitFlash: 0, muzzle: 0 };
+    return { x: SPAWN.x, y: SPAWN.y, alive: true, tier: 1, drones: 0, shield: 0, bombs: 1, fireCd: 0, invuln: 2, respawn: 0, tilt: 0, t: 0, dx: [-26, 26, -46, 46, -64, 64], dy: [6, 6, 16, 16, 24, 24], bombCd: 0, hitFlash: 0, muzzle: 0 };
   }
 
   Game.reset = function (demo, startStage) {
     this.demo = !!demo;
     this.score = 0; this.lives = C.START_LIVES; this.stage = 0;
+    this.perm = { n: 0, dmg: 1, rate: 1, drones: 0, bombs: 0 };         /* permanent upgrades for this run, one per Serpent Mother destroyed */
     this.combo = 0; this.comboT = 0; this.mult = 1;
     this.lifeIdx = 0; this.nextLifeAt = C.EXTRA_LIFE_AT[0];
     this.pb = []; this.eb = []; this.pk = []; this.maxEB = 40;
@@ -54,6 +55,24 @@
   };
   Game.breakCombo = function () { this.combo = 0; this.comboT = 0; this.mult = 1; };
 
+  /* ---------- caps that grow: every Serpent Mother unlocks one more weapon tier (past the piercing lances), and her reward can add wingman slots and bomb slots ---------- */
+  Game.maxTier = function () { return Math.min(9, C.MAX_TIER + (this.tier || 0)); };
+  Game.maxDrones = function () { return Math.min(6, C.MAX_DRONES + (this.perm ? this.perm.drones : 0)); };
+  Game.maxBombs = function () { return C.MAX_BOMBS + (this.perm ? this.perm.bombs : 0); };
+  /* the reward for a destroyed boss, in rotation: damage, a wingman slot, a bomb slot, fire rate */
+  const REWARDS = [
+    { name: '+15% DAMAGE', apply: (g) => { g.perm.dmg *= 1.15; } },
+    { name: '+1 WINGMAN SLOT', apply: (g, p) => { g.perm.drones++; p.drones = Math.min(g.maxDrones(), p.drones + 1); } },
+    { name: '+1 BOMB SLOT', apply: (g, p) => { g.perm.bombs++; p.bombs = Math.min(g.maxBombs(), p.bombs + 1); } },
+    { name: '+10% FIRE RATE', apply: (g) => { g.perm.rate *= 1.1; } },
+  ];
+  Game.grantReward = function () {
+    const r = REWARDS[this.perm.n % REWARDS.length];
+    r.apply(this, this.player); this.perm.n++;
+    A.sfx.weaponUp(); FX.text(W / 2, 330, 'BOSS REWARD', '#ffd24a', 26); FX.text(W / 2, 362, r.name, '#ffffff', 22);
+    return r.name;
+  };
+
   /* ---------- bullets ---------- */
   Game.ebullet = function (x, y, vx, vy, kind, r) {
     if (this.eb.length > this.maxEB) return;
@@ -64,7 +83,7 @@
     this.eb.length = 0;
   };
   Game.pbullet = function (x, y, ang, speed, dmg, kind, pierce) {
-    this.pb.push({ x, y, vx: Math.sin(ang) * speed, vy: -Math.cos(ang) * speed, ang, dmg, kind, pierce: !!pierce, hit: pierce ? [] : null, r: kind === 'lance' ? 4 : 3.2, dead: false });
+    this.pb.push({ x, y, vx: Math.sin(ang) * speed, vy: -Math.cos(ang) * speed, ang, dmg: dmg * this.perm.dmg, kind, pierce: !!pierce, hit: pierce ? [] : null, r: kind === 'lance' ? 4 : 3.2, dead: false });
   };
 
   /* ---------- pickups ---------- */
@@ -73,7 +92,7 @@
   };
   Game.randomKind = function () {
     const p = this.player;
-    const w = { W: p.tier >= C.MAX_TIER ? 1 : 4, D: p.drones >= C.MAX_DRONES ? 1 : 2.4, S: 2, B: p.bombs >= C.MAX_BOMBS ? 0.8 : 2 };
+    const w = { W: p.tier >= this.maxTier() ? 1 : 4, D: p.drones >= this.maxDrones() ? 1 : 2.4, S: 2, B: p.bombs >= this.maxBombs() ? 0.8 : 2 };
     let tot = 0; for (const k in w) tot += w[k];
     let r = Math.random() * tot;
     for (const k in w) { r -= w[k]; if (r <= 0) return k; }
@@ -84,20 +103,20 @@
     FX.sparks(x, y, 12, 170, FX.col(50), 0.5);
     FX.ring(x, y, 6, 36, 'hsla(50,100%,70%,1)', 0.35, 2);
     if (pk.kind === 'W') {
-      if (p.tier < C.MAX_TIER) { p.tier++; A.sfx.weaponUp(); FX.text(p.x, p.y - 34, p.tier === C.MAX_TIER ? 'PIERCING LANCES!' : 'WEAPON UP', '#ffe27a', 18); }
+      if (p.tier < this.maxTier()) { p.tier++; A.sfx.weaponUp(); FX.text(p.x, p.y - 34, p.tier === C.MAX_TIER ? 'PIERCING LANCES!' : p.tier > C.MAX_TIER ? 'OVERCHARGE ' + (p.tier - C.MAX_TIER) : 'WEAPON UP', '#ffe27a', 18); }
       else { this.award(1000, x, y); A.sfx.pickup(); }
     } else if (pk.kind === 'D') {
-      if (p.drones < C.MAX_DRONES) { p.drones++; A.sfx.drone(); FX.text(p.x, p.y - 34, 'WINGMAN', '#7dffb8', 18); }
+      if (p.drones < this.maxDrones()) { p.drones++; A.sfx.drone(); FX.text(p.x, p.y - 34, 'WINGMAN', '#7dffb8', 18); }
       else { this.award(1000, x, y); A.sfx.pickup(); }
     } else if (pk.kind === 'S') {
       p.shield = C.SHIELD_TIME; A.sfx.shield(); FX.text(p.x, p.y - 34, 'SHIELD', '#8fd4ff', 18);
-    } else if (p.bombs < C.MAX_BOMBS) { p.bombs++; A.sfx.bombPickup(); FX.text(p.x, p.y - 34, 'SMART BOMB', '#ff8ca0', 18); }
+    } else if (p.bombs < this.maxBombs()) { p.bombs++; A.sfx.bombPickup(); FX.text(p.x, p.y - 34, 'SMART BOMB', '#ff8ca0', 18); }
     else { this.award(1000, x, y); A.sfx.pickup(); }
     this.addScore(200);
   };
 
   /* ---------- player ---------- */
-  const RATE = [0, 7.5, 8, 8.5, 10];
+  const RATE = (t) => (t < 5 ? [0, 7.5, 8, 8.5, 10][t] : 10 + 0.4 * (t - 4));
   Game.firePlayer = function (p) {
     const sp = 960, y = p.y - 16;
     if (p.tier === 1) this.pbullet(p.x, y, 0, sp, 1, 'bolt');
@@ -106,13 +125,12 @@
       this.pbullet(p.x, y, 0, sp, 1, 'bolt');
       this.pbullet(p.x - 5, y + 3, -0.17, sp, 1, 'bolt');
       this.pbullet(p.x + 5, y + 3, 0.17, sp, 1, 'bolt');
-    } else {
-      this.pbullet(p.x - 4, y, 0, 1150, 1.5, 'lance', true);
-      this.pbullet(p.x + 4, y, 0, 1150, 1.5, 'lance', true);
-      this.pbullet(p.x - 10, y + 4, -0.2, sp, 1, 'bolt');
-      this.pbullet(p.x + 10, y + 4, 0.2, sp, 1, 'bolt');
+    } else {                                                              /* tier 4: two lances and two angled bolts; every tier after it (one more per Serpent Mother) adds a lance and two more bolts */
+      const ex = p.tier - 4, nL = 2 + ex, nB = 2 + 2 * ex;
+      for (let i = 0; i < nL; i++) this.pbullet(p.x + (i - (nL - 1) / 2) * 8, y, 0, 1150, 1.5, 'lance', true);
+      for (let i = 0; i < nB; i++) { const side = i % 2 ? 1 : -1, rank = Math.floor(i / 2) + 1; this.pbullet(p.x + side * (6 + rank * 4), y + 4, side * (0.1 + 0.1 * rank), sp, 1, 'bolt'); }
     }
-    p.fireCd = 1 / RATE[p.tier];
+    p.fireCd = 1 / (RATE(p.tier) * this.perm.rate);
     p.muzzle = 0.06;
     A.sfx.shoot(p.tier);
   };
@@ -211,10 +229,10 @@
     if (fire && p.fireCd <= 0) this.firePlayer(p);
     if (bomb) this.useBomb();
     p.dcd = (p.dcd || 0) - dt;
-    p.dpos = p.dpos || [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
+    p.dpos = p.dpos || [];
     const k = 1 - Math.exp(-11 * dt);
     for (let i = 0; i < p.drones; i++) {
-      const d = p.dpos[i];
+      const d = p.dpos[i] || (p.dpos[i] = { x: p.x, y: p.y });
       d.x += (p.x + p.dx[i] - d.x) * k; d.y += (p.y + p.dy[i] + Math.sin(p.t * 3 + i * 2) * 2 - d.y) * k;
       if (fire && p.dcd <= 0) this.pbullet(d.x, d.y - 8, 0, 900, 0.8, 'dbolt');
     }
@@ -384,7 +402,8 @@
     if (this.perfect && !this.demo) bonus = boss ? 5000 : 1000 + this.stage * 100;
     if (bonus) { this.addScore(bonus); A.sfx.perfect(); }
     if (!this.demo) A.sfx.stageClear();
-    this.banner = { text: boss ? 'SERPENT MOTHER DESTROYED' : 'LEVEL ' + this.stage + ' CLEAR', sub: bonus ? 'PERFECT  +' + U.fmt(bonus) : '', t: 0, life: 3 };
+    const reward = boss && !this.demo ? this.grantReward() : '';
+    this.banner = { text: boss ? 'SERPENT MOTHER DESTROYED' : 'LEVEL ' + this.stage + ' CLEAR', sub: (bonus ? 'PERFECT  +' + U.fmt(bonus) : '') + (reward ? (bonus ? '    ' : '') + 'REWARD  ' + reward : ''), t: 0, life: boss ? 3.6 : 3 };
   };
 
   Game.flow = function (dt) {
@@ -454,7 +473,7 @@
     if (p.muzzle > 0) GFX.drawGlow(ctx, 'hsla(190,100%,65%,1)', p.x, p.y - 20, 14, 0.9);
     ctx.globalCompositeOperation = 'source-over';
     for (let i = 0; i < p.drones; i++) {
-      const d = p.dpos[i];
+      const d = p.dpos[i]; if (!d) continue;
       ctx.globalCompositeOperation = 'lighter';
       GFX.drawGlow(ctx, 'hsla(150,100%,60%,1)', d.x, d.y + 6, 6, 0.8);
       ctx.globalCompositeOperation = 'source-over';
