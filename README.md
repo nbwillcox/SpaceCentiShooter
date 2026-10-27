@@ -19,6 +19,10 @@ Everything is generated in code: sprites are vector-drawn on the fly, and all so
 
 Play in portrait. Drag anywhere to move the ship around its zone (it hovers just above your finger and fires while you touch), tap **BOMB** for a smart bomb and the pause button for the menu. The on-screen controls appear on touch devices automatically; Settings has size, opacity and a left-handed layout. Use your browser's *Add to Home Screen* to install it as a full-screen app.
 
+### Controller
+
+Plug in a gamepad and it just works: left stick or D-pad moves, **A / RT** fires, **X / B** is the smart bomb, **Start** pauses. In menus the D-pad / left stick moves the highlight, **A** selects, **B** goes back and **Start** plays or resumes. **Settings -> Controller** has a dead-zone slider and lets you remap every button.
+
 ## Gameplay
 
 - The **Hive Serpent** is a chain of segments that zigzags down through the crystal field, turning at every crystal and dropping a row. Shoot a segment and it leaves a crystal behind and the chain splits: the piece behind becomes a new head. Heads are worth more.
